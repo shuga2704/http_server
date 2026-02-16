@@ -71,7 +71,7 @@ fn handle_request(file_directory: PathBuf, mut stream: TcpStream) -> Result<()> 
                     debug!("File path requested: `{path}`");
 
                     let full_path = file_directory.join(path);
-                    println!("Full path: {}", full_path.display());
+                    debug!("Full path: {}", full_path.display());
                     match std::fs::read_to_string(&full_path) {
                         Ok(body) => {
                             format!(
@@ -106,7 +106,7 @@ fn main() -> Result<()> {
     env_logger::init();
 
     let file_directory = std::env::args().nth(2).unwrap_or("/".to_string());
-    println!("File directory: {}", file_directory);
+    debug!("File directory: {}", file_directory);
     let file_directory = PathBuf::from(file_directory);
 
     let listener = TcpListener::bind("127.0.0.1:4221").unwrap();
@@ -121,7 +121,7 @@ fn main() -> Result<()> {
                 response_handles.push(handle);
             }
             Err(e) => {
-                println!("error: {}", e);
+                debug!("error: {}", e);
             }
         }
     }
