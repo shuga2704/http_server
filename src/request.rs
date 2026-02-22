@@ -17,6 +17,17 @@ pub(crate) struct Request {
     pub(crate) body: Option<String>,
 }
 
+impl Request {
+    pub(crate) fn get_header(&self, header_key: &str) -> Option<Value> {
+        for (key, value) in &self.headers {
+            if *key == *header_key {
+                return Some(value.clone());
+            }
+        }
+        None
+    }
+}
+
 impl TryFrom<TcpStream> for Request {
     type Error = anyhow::Error;
 
@@ -59,12 +70,24 @@ impl TryFrom<TcpStream> for Request {
             headers.push((key.to_string(), value.trim_end().to_string()));
         }
 
+        // Read the request body
+        let mut body = String::new();
+        loop {
+            let mut body_line = String::new();
+            let bytes_read = request_buffer.read_line(&mut body_line)?;
+            debug!("Read body line: {body_line}");
+            if bytes_read == 0 || body_line == "\r\n" {
+                break;
+            }
+            body.push_str(&body_line);
+        }
+
         Ok(Request {
             method,
             path,
             http_version,
             headers,
-            body: None,
+            body: body.is_empty().then(|| body),
         })
     }
 }

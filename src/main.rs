@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
 use log::{debug, error};
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
@@ -62,26 +62,50 @@ fn handle_request(file_directory: PathBuf, mut stream: TcpStream) -> Result<()> 
                 }
             }
         } else if request.path.starts_with("/files/") {
-            let file_path = request.path.split_once("/files/");
+            let request_file_path = request.path.split_once("/files/");
 
             std::fs::write("/tmp/foo", "mango banana apple")?;
 
-            match file_path {
+            match request_file_path {
                 Some((_, path)) => {
                     debug!("File path requested: `{path}`");
 
-                    let full_path = file_directory.join(path);
-                    debug!("Full path: {}", full_path.display());
-                    match std::fs::read_to_string(&full_path) {
-                        Ok(body) => {
-                            format!(
-                                "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: {}\r\n\r\n{}",
-                                body.len(),
-                                body
-                            )
+                    match request.method.as_str() {
+                        "GET" => match std::fs::read_to_string(&file_directory.join(path)) {
+                            Ok(body) => {
+                                format!(
+                                    "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: {}\r\n\r\n{}",
+                                    body.len(),
+                                    body
+                                )
+                            }
+                            Err(_e) => {
+                                format!("HTTP/1.1 404 Not Found\r\n\r\n")
+                            }
+                        },
+                        "POST" => {
+                            debug!("Storing file {path}");
+
+                            if request.get_header("Content-Type")
+                                != Some("application/octet-stream".to_string())
+                            {
+                                format!("HTTP/1.1 400 Bad Request\r\n\r\n")
+                            } else if request.get_header("Content-Length").is_none() {
+                                format!("HTTP/1.1 400 Bad Request\r\n\r\n")
+                            } else if let Some(body) = request.body {
+                                match std::fs::write(&file_directory.join(path), body) {
+                                    Ok(_) => format!("HTTP/1.1 201 CreatedK\r\n\r\n"),
+                                    Err(e) => {
+                                        error!("Error writing file: {e}");
+                                        format!("HTTP/1.1 500 Internal Server Error\r\n\r\n")
+                                    }
+                                }
+                            } else {
+                                format!("HTTP/1.1 400 Bad Request\r\n\r\n")
+                            }
                         }
-                        Err(_e) => {
-                            format!("HTTP/1.1 404 Not Found\r\n\r\n")
+                        _ => {
+                            format!("HTTP/1.1 405 Method Not Allowed\r\n\r\n")
                         }
                     }
                 }
